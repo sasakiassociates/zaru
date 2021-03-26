@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang='en'>
+<meta charset="utf-8">
+<head>
+    <title>Shade the Earth (Terrarium Example)</title>
+
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.0.3/dist/leaflet.css"
+          integrity="sha512-07I2e+7D8p6he1SIM+1twR5TIrhUQn9+I6yjqD53JQjFiMf8EtC93ty0/5vJTZGF8aAocvHYNEDJajGdNx1IsQ=="
+          crossorigin=""/>
+    <script src="https://unpkg.com/leaflet@1.0.3/dist/leaflet-src.js"
+            integrity="sha512-WXoSHqw/t26DszhdMhOXOkI7qCiv5QWXhH9R7CgvgZMHz1ImlkVQ3uNsiQKu5wwbbxtPzFXd1hK4tzno2VqhpA=="
+            crossorigin=""></script>
+    <script
+            src="https://code.jquery.com/jquery-3.3.1.min.js"
+            integrity="sha256-FgpCb/KJQlLNfOu91ta32o/NMZxltwRo8QtmkMRdAu8="
+            crossorigin="anonymous"></script>
+
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <script src="../../src/leaflet/Leaflet.TileLayer.Regl.js"></script>
+    <script src="../lib/regl.js"></script>
+    <script src="../lib/vendor/chroma.min.js"></script>
+    <script src="../lib/vendor/dat.gui.min.js"></script>
+
+    <link href="https://fonts.googleapis.com/css?family=Roboto:500" rel="stylesheet">
+    <style>
+        .debug-tile {
+            outline: 1px solid #e2e6ff;
+            color: #000000;
+            opacity: 0.6;
+        }
+
+        .debug-tile-txt {
+            background-color: rgba(255, 255, 255, 0.5);
+        }
+    </style>
+    <style>
+        body, html {
+            font-family: 'Roboto', sans-serif;
+        }
+
+        .info {
+            position: absolute;
+            top: 60px;
+            left: 300px;
+            font-size: 50px;
+            opacity: 0.4;
+            z-index: 401;
+            background: aliceblue;
+        }
+
+        #map {
+            width: 100%;
+            max-height: 100%;
+            height: 1000px;
+        }
+
+        .gradient-canvas {
+            position: absolute;
+            top: 30px;
+            left: 77px;
+            width: 256px;
+            height: 20px;
+            border: 1px solid black;
+        }
+
+        .gradient-left {
+            position: absolute;
+            text-align: right;
+            width: 60px;
+            top: 30px;
+            left: 10px;
+            border: 1px solid #dddddd;
+        }
+
+        .gradient-right {
+            position: absolute;
+            width: 60px;
+            top: 30px;
+            left: 340px;
+            border: 1px solid #dddddd;
+        }
+
+    </style>
+</head>
+<body>
+<!--<canvas width="600" height="200" id="chartCanvas" style="border: 1px solid gray"></canvas>-->
+<div style="height: 50px;">Shade the Earth</div>
+<div id="map"></div>
+
+<script type="text/javascript">
+    let mapOptions = {
+        initZoom: 11,
+        minZoom: 2,
+        maxZoom: 15
+    };
+    const debugMode = false;
+
+    const imageMode = false;
+
+    let gradientCanvas;
+
+    // let startCenter = [-3.07, 37.352013];//Kilimanjaro
+    // let startCenter = [25, -100];//Monterrey
+    let startCenter = [37.088156, -83.135530];//KY/VA mountains
+
+    const $gradientLowTxt = $('<div class="gradient-left">').appendTo('body');
+    const $gradientHighTxt = $('<div class="gradient-right">').appendTo('body');
+    const $info = $('<div class="info">').text('0m').appendTo('body');
+
+    //region shader code
+    // language=GLSL
+    var fragmentShader = `
+        float toHeight(vec4 terrainColor) {
+            vec3 dv = terrainColor.xyz;
+            vec3 dvTwoFiveFive = dv * 255.0;
+            float height = (dvTwoFiveFive.x * 256.0 + dvTwoFiveFive.y + dvTwoFiveFive.z / 256.0) - 32768.0;
+            return height;
+        }
+
+        void main () {
+            vec4 terrainNormal = texture2D(uTexture0, textureCoord);
+            vec4 terrainColor = texture2D(uTexture1, textureCoord);
+            float height = toHeight(terrainColor);
+            float r = 1.;
+            float y = r * sin(u_rotation);
+            float x = r * cos(u_rotation);
+
+            vec3 light_dir = normalize(vec3(x, y, u_altitude));
+
+            vec3 albedo = vec3(u_albedo, u_albedo, u_albedo);
+            vec3 ambient = u_ambient * albedo;
+
+            float h = (height - u_base) / u_height;
+
+            vec4 gradientColor = texture2D(u_gradient, vec2(h, 0.5));
+
+            //    vec3 color = u_intensity * vec3(max(h,0.), 0, 0.6);
+            vec3 color = gradientColor.rgb * gradientColor.rgb;
+
+            vec3 norm = normalize(terrainNormal.rgb * 2.0 - 1.0);
+            float diffuse = max(dot(light_dir, norm), 0.0);
+            if (u_altitude > 4.99) {
+                diffuse = 1.;
+            }
+            gl_FragColor = vec4(diffuse * albedo * color * u_ambient, 1.0);
+
+        }`;
+    //endregion
+    const props = {//altered for appalachian mountains near KY/VA
+        'Rotation': 95,
+        'Albedo': 140,
+        'Ambient': 90,
+        'LightZ': 94,
+        'Base': 31,
+        'Height': 107,
+        'Multiplier': 10,
+        'Animate': false,
+        'Intensity': 50,
+        'Opacity': 0.9,
+        'Colors': 5,
+        'Color1': '#2eaf6a',
+        'Color2': '#ffff96',
+        'Color3': '#ffcc7a',
+        'Color4': '#e3c2a9',
+        'Color5': '#FFFFFF',
+        'Color6': '#FFFFFF',
+        'Color7': '#FFFFFF',
+        'Color8': '#FFFFFF',
+        'Color9': '#FFFFFF',
+    };
+    const numColors = 9;
+
+    // const props = {
+    //     'Rotation': 135,
+    //     'Albedo': 100,
+    //     'Ambient': 90,
+    //     'LightZ': 100,
+    //     'Base': 50,
+    //     'Height': 100,
+    //     'Multiplier': 10,
+    //     'Animate': false,
+    //     'Intensity': 50,
+    //     'Opacity': 0.8,
+    //     'Colors': 5,
+    //     'Color1': '#2eaf6a',
+    //     'Color2': '#ffff96',
+    //     'Color3': '#ffcc7a',
+    //     'Color4': '#e3c2a9',
+    //     'Color5': '#FFFFFF',
+    // };
+
+    let lastRamp = '';
+
+    function drawCanvas() {
+        const rampColors = [];
+        for (let i = 1; i <= props.Colors; i++) {
+            rampColors.push(props['Color' + i]);
+        }
+        const ramp = rampColors.join('_');
+        if (ramp === lastRamp) {
+            return false;
+        }
+        lastRamp = ramp;
+
+        const comfortScale = chroma.scale(rampColors).mode('lch');
+
+        var ctx = gradientCanvas.getContext("2d");
+        var imgData = ctx.createImageData(256, 1);
+        var i;
+        for (i = 0; i < imgData.data.length; i += 4) {
+            const color = comfortScale(i / imgData.data.length).rgb();
+            imgData.data[i + 0] = color[0];
+            imgData.data[i + 1] = color[1];
+            imgData.data[i + 2] = color[2];
+            imgData.data[i + 3] = 255;
+        }
+        ctx.putImageData(imgData, 0, 0);
+
+        return true;
+    }
+
+    function drawText() {
+        const base = props.Base * props.Multiplier;
+        const height = props.Height * props.Multiplier;
+        $gradientLowTxt.text(Math.round(base) + 'm');
+        $gradientHighTxt.text(Math.round(base + height) + 'm');
+        $info.text(Math.round(props.Rotation) + '°');
+    }
+
+    const setup = (gradientImage) => {
+        let gradientTexture;
+
+        var map = L.map('map', {fadeAnimation: false}).setView(startCenter, mapOptions.initZoom);
+
+        // var OpenStreetMap_HOT = L.tileLayer('https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png', {
+        //     maxZoom: 5,
+        //     attribution: '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>, Tiles courtesy of <a href="http://hot.openstreetmap.org/" target="_blank">Humanitarian OpenStreetMap Team</a>'
+        // }).addTo(map);
+        var Stamen_Toner = L.tileLayer('https://stamen-tiles-{s}.a.ssl.fastly.net/toner/{z}/{x}/{y}.{ext}', {
+            attribution: 'Map tiles by <a href="http://stamen.com">Stamen Design</a>, <a href="http://creativecommons.org/licenses/by/3.0">CC BY 3.0</a> &mdash; Map data &copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+            subdomains: 'abcd',
+            minZoom: 2,
+            maxZoom: 20,
+            ext: 'png'
+        }).addTo(map);
+
+
+        let tileDir = 'https://fddw3niowa.execute-api.us-east-1.amazonaws.com/dev/tiles/';
+
+        const getUniformProps = (includeRamp) => {
+            const ans = {
+                rotation: props.Rotation * Math.PI / 180,
+                albedo: props.Albedo / 100,
+                ambient: props.Ambient / 100,
+                altitude: props.LightZ / 100,
+                base: props.Base * props.Multiplier,
+                height: props.Height * props.Multiplier,
+                intensity: props.Intensity / 100,
+            };
+            if (includeRamp) ans.gradient = {image: gradientImage};
+            return ans;
+        };
+
+        var shaderLayer = L.tileLayer.regl({
+            noWrap: true,
+            uniformProps: getUniformProps(true),
+            uniformPropTypes: {gradient: 'sampler2D'},
+            fragmentShader: fragmentShader,
+            tileUrls: [
+                tileDir + 'normal/{z}/{x}/{y}',
+                tileDir + 'terrarium/{z}/{x}/{y}',
+            ]
+        }).addTo(map);
+
+        if (debugMode) {
+            L.GridLayer.DebugCoords = L.GridLayer.extend({
+                createTile: function (coords) {
+                    const tile = document.createElement('div');
+                    tile.className = "debug-tile";
+                    let yUp = [coords.x, Math.pow(2, coords.z) - coords.y, coords.z].join(', ');
+                    let yDown = [coords.x, coords.y, coords.z].join(', ');
+                    $('<div class="debug-tile-txt">').text(yDown + ' | ' + yUp).appendTo(tile);
+                    // $('<div>').text([coords.x, Math.pow(2, coords.z) - coords.y, coords.z].join(', ')).appendTo(tile);
+                    return tile;
+                }
+            });
+
+            L.gridLayer.debugCoords = function (opts) {
+                return new L.GridLayer.DebugCoords(opts);
+            };
+
+            map.addLayer(L.gridLayer.debugCoords());
+        }
+
+        const setupGui = function () {
+            let animInterval;
+            const animInfo = {counter: 0, baseVal: 0, range: 1000};
+            const gui = new dat.GUI({width: 600});
+
+            let propChange = function () {
+                drawText();
+                const changeCanvas = drawCanvas();
+
+                shaderLayer.setUniformProperty(getUniformProps(changeCanvas));
+            };
+            gui.add(props, 'Rotation', 0, 360).step(1).onChange(propChange);
+            gui.add(props, 'Albedo', 0, 200).step(1).onChange(propChange);
+            gui.add(props, 'Ambient', 0, 100).step(1).onChange(propChange);
+            gui.add(props, 'LightZ', 0, 500).step(1).onChange(propChange);
+            gui.add(props, 'Multiplier', 1, 20).step(1).onChange(propChange);
+            gui.add(props, 'Base', -100, 500).step(1).onChange(propChange);
+            gui.add(props, 'Height', 0, 500).step(1).onChange(propChange);
+            gui.add(props, 'Animate').onChange(() => {
+                if (props.Animate) {
+                    animInfo.baseVal = props.Base;
+                    animInfo.range = props.Height / 4;
+                    animInterval = setInterval(() => {
+                        animInfo.counter++;
+                        props.Base = animInfo.baseVal + Math.sin(animInfo.counter / 10) * animInfo.range;
+                        propChange();
+                    }, 100);
+                } else {
+                    clearInterval(animInterval);
+                    props.Base = animInfo.baseVal;
+                }
+
+            });
+            gui.add(props, 'Colors', 2, numColors).step(1).onChange(propChange);
+            const colorList = gui.addFolder('Color List');
+            const introSettings = {active: false};
+
+            props.Intro = () => {
+                if (introSettings.active) {
+                    clearInterval(animInterval);
+                    introSettings.active = false;
+                    Object.keys(introSettings.init).forEach((k) => {
+                        props[k] = introSettings.init[k];
+                    });
+                    propChange();
+                } else {
+                    let step = 0;
+                    introSettings.init = {
+                        Height: props.Height,
+                        LightZ: props.LightZ
+                    };
+                    props.Height = 1000;
+                    props.LightZ = 0;
+                    const center = map.getCenter();
+                    const zoom = map.getZoom();
+                    map.flyTo(L.latLng(center.lat - 1, center.lng + 1), zoom + 1, {duration: 25});
+
+                    animInterval = setInterval(() => {
+                        if (props.Height > introSettings.init.Height) {
+                            props.Height -= 1;
+                        }
+                        if (props.LightZ < introSettings.init.LightZ) {
+                            props.LightZ += 0.5;
+                        }
+                        propChange();
+                        step++;
+                    }, 30);
+                    introSettings.active = true;
+                }
+
+            };
+            gui.add(props, 'Intro');
+
+            if (!imageMode) {
+                for (let i = 1; i <= numColors; i++) {
+                    colorList.addColor(props, 'Color' + i).onChange(propChange);
+                }
+            }
+
+            // gui.add(props, 'Intensity', 0, 100).step(1).onChange(propChange);
+            gui.add(props, 'Opacity', 0, 1).onChange(function () {
+                shaderLayer.setOpacity(props.Opacity);
+            });
+
+            shaderLayer.setOpacity(props.Opacity);
+
+            $info.text(Math.round(props.Rotation) + '°');
+            $('.dg.ac').css('z-index', 800);
+        };
+
+        setupGui();
+    };
+
+    const images = {
+        'ramp': {url: './img/chroma-diverging.png'},
+    };
+
+    // const $canvas = $('<canvas width="256" height="256">').appendTo('body');
+    // const gl = $canvas[0].getContext("webgl", {preserveDrawingBuffer: true, antialias: false});//antialias: false,
+    //
+    // const regl = createREGL({gl: gl});
+
+    const loadImages = (callback) => {
+        let tasks = 0;
+        Object.keys(images).forEach((k) => {
+            tasks++;
+            const imageData = images[k];
+            const image = new Image();
+            image.onload = function () {
+                imageData.image = image;
+                if (--tasks === 0) {
+                    callback();
+                }
+            };
+            image.src = imageData.url;
+        });
+    };
+
+    if (imageMode) {
+        loadImages(() => {
+            setup(images.ramp.image)
+        });
+    } else {
+        const $canvas = $('<canvas class="gradient-canvas" width="256" height="1">').appendTo('body');
+        gradientCanvas = $canvas[0];
+        drawCanvas();
+        setup(gradientCanvas)
+    }
+    drawText();
+
+
+</script>
+
+
+</body>
+</html>
