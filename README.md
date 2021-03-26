@@ -14,6 +14,8 @@ Zaru uses [geo-png-db](https://github.com/sasakiassociates/geo-png-db) tiles to 
 
 ### Real-time mouse inspection
 
+![Screen capture showing debugger visualization used for inspecting pixels within a circle](img/circle-inspect.png)
+Screen capture showing debugger visualization used for inspecting pixels within a circle.
 
 ### Zoom-beyond
 Data pixels may not be available at finer zoom levels. Zoom-beyond lets users zoom in closer than the data fidelity such that the pixels get rendered as larger blocks. See examples/asdf/asdf-devt-suitability.html.
