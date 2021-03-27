@@ -8,7 +8,7 @@ Zaru primarily uses [geo-png-db](https://github.com/sasakiassociates/geo-png-db)
 
 Data tiles statically hosted are queried by layer and can be composited and colored on the fly to produce novel outputs. Images are processed directly on the GPU. To ensure real-time rendering speeds, adjustments to colors and numeric values are sent as parameters to the GPU to modify graphics directly.
 
-![Illustration of overall pipeline for Zaru. Data tiles hosted on S3 are loaded on demand. Shader code responds to changes in parameters. Multiple layers are composited.](img/Zaru pipeline.png)
+![Illustration of overall pipeline for Zaru. Data tiles hosted on S3 are loaded on demand. Shader code responds to changes in parameters. Multiple layers are composited.](img/zaru-pipeline.png)
 
 ### Canvas tiles
 The low level [regl](https://github.com/regl-project/regl) library is used to render each tile as a canvas with a custom shader. Spatial parameters are passed through to each tile.
@@ -32,7 +32,7 @@ As the cursor moves, up to 4 image tiles are drawn onto a canvas to cover the ci
 Screen capture showing debugger visualization used for inspecting pixels within a circle.
 
 ### Zoom-beyond
-Depending on the data tile source, full pixel resolution may not be available at finer zoom levels. A "zoom-beyond" solution lets users zoom in closer than the data fidelity such that the pixels get rendered as larger blocks. See amenity-access or asdf/asdf-devt-suitability.html in the examples folder to see this in action.
+Depending on the data tile source, full pixel resolution may not be available at finer zoom levels. A "zoom-beyond" solution lets users zoom in closer than the data fidelity such that the pixels get rendered as larger blocks. Look at amenity-access or asdf/asdf-devt-suitability.html in the examples folder to see this in action.
 
 ![Screen capture showing data pixels at a lower resolution than the screen](img/zoom-beyond-14.png)
 In this extreme example, data is available at zoom level 11 while the current map display is 3 zooms beyond at level 14. Though not ideal, zoom-beyond can provide valuable insights in the event that more detailed data is unavailable. Layering can be used to help with aesthetics and readability.
