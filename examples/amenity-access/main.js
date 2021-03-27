@@ -2,6 +2,7 @@ let shaderLayer;
 let dotDensityShader;
 
 const tileDir = 'http://tiles.sasaki.com/data/amenity-access';
+// const tileDir = './data';
 
 const debugMode = true;
 let mobileMode = false;
@@ -98,7 +99,7 @@ if (mobileMode) {
     $('#mouse-over-info').hide();
 }
 
-const population = 'http://s3.amazonaws.com/tiles.sasaki.com/raster/tmp/population';
+const population = 'http://tiles.sasaki.com/raster/tmp/population';
 
 // const population = 'http://tiles.sasaki.com/raster/population';
 
@@ -109,13 +110,13 @@ function logEvent(e) {
 let _timeGridCanvasRender = {
     urls: [],
     render: (neededOverride) => {
-        if (!_timeGridCanvasRender.canvasSets) return;
-        Object.keys(_timeGridCanvasRender.canvasSets).forEach((tileId) => {
-            const canvasSet = _timeGridCanvasRender.canvasSets[tileId];
+        if (!_timeGridCanvasRender.loadedImages) return;
+        Object.keys(_timeGridCanvasRender.loadedImages).forEach((tileId) => {
+            const canvasSet = _timeGridCanvasRender.loadedImages[tileId];
             if (canvasSet.needsRender || neededOverride) {
                 console.log('*** RERENDER ' + tileId, canvasSet.needsRender, neededOverride);
                 canvasSet.needsRender = false;
-                // console.log(_timeGridCanvasRender.canvasSets);
+                // console.log(_timeGridCanvasRender.loadedImages);
                 const ctx = canvasSet.canvas.getContext('2d');
                 //TODO upper level canvas with combined min values should be shared between tile canvases
                 if (combineMinValue(ctx, canvasSet.images, _activeTimeIds)) {
@@ -126,8 +127,8 @@ let _timeGridCanvasRender = {
         if (shaderLayer) shaderLayer.renderAll();
     },
     onLoad: () => {
-        Object.keys(_timeGridCanvasRender.canvasSets).forEach((tileId) => {
-            const canvasSet = _timeGridCanvasRender.canvasSets[tileId];
+        Object.keys(_timeGridCanvasRender.loadedImages).forEach((tileId) => {
+            const canvasSet = _timeGridCanvasRender.loadedImages[tileId];
             // $(canvasSet.canvas).appendTo('body');
         });
         _timeGridCanvasRender.render(false);

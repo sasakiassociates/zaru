@@ -1,5 +1,5 @@
 const quadShader = {
-    verts : [
+    verts: [
         [-1.0, +1.0],
         [+1.0, +1.0],
         [+1.0, -1.0],
@@ -15,9 +15,9 @@ const quadShader = {
     //     [1.0, 0.0],
     //     [1.0, 1.0]
     // ],
-    elements: [2,1,0,2,0,3],
+    elements: [2, 1, 0, 2, 0, 3],
     vertexShader: function (flipY) {
-      return `
+        return `
         const vec2 madd = vec2(0.5, 0.5);
         attribute vec2 a_position;
         varying vec2 textureCoord;
@@ -132,35 +132,27 @@ vec4 maxBlend(float seed, vec2 coordinate, float[${count}] values, vec3[${count}
 }
 
 vec4 goldNoiseBlend(float seed, vec2 coordinate, float[${count}] values, vec3[${count}] colors, float fade) {
-    float total = 0.0;
-
-    for (int i = 0; i < ${count}; i++) {
-        total = total + values[i];
-    }
-
-    //always normalize by total (unlike dot-density) because we need to make sure a dot is represented
-    for (int i = 0; i < ${count}; i++) {
-        values[i] = values[i] / total;
-    }
+    // float total = 0.0;
+    //
+    // for (int i = 0; i < ${count}; i++) {
+    //     total = total + values[i];
+    // }
+    //
+    // //always normalize by total (unlike dot-density) because we need to make sure a dot is represented
+    // for (int i = 0; i < ${count}; i++) {
+    //     values[i] = values[i] / total;
+    // }
 
     vec4 dotColor = vec4(0.0, 0.0, 0.0, 0.0);
 
-    if (total > 0.) {
-        float random = gold_noise(coordinate, seed);
-        if (random == 0.) random = 0.0000001;//avoid random value returning exactly zero
-        float breakPt = 0.0;
-        for (int i = 0; i < ${count}; i++) {
-            breakPt = breakPt + values[i];
-            if (random <= breakPt) {
-                float a = total / fade;
-                if (a > 1.) {
-                    a = 1.;
-                }
-                //mix(vec4(0.0), dotColor, 0.25);
-                dotColor = mix(vec4(0.0), vec4(colors[i], 1.), clamp(total, 0., a));
-//                dotColor = vec4(colors[i], 0.1);//clamp(total/4., 0., 1.0));
-                break;
-            }
+    float random = gold_noise(coordinate, seed);
+    if (random == 0.) random = 0.0000001;//avoid random value returning exactly zero
+    float breakPt = 0.0;
+    for (int i = 0; i < ${count}; i++) {
+        breakPt = breakPt + values[i];
+        if (random <= breakPt) {
+            dotColor = vec4(colors[i], 1.);
+            break;
         }
     }
 
