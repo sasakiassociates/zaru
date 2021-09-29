@@ -43,4 +43,4 @@ To run examples, use a local server at the root (including src) and load HTML fi
 
 ## Showcase
 
-See more [examples here](http://maps.sasaki.com/zaru/). Note that not all examples in the showcase are included in this repository. This is pending further code cleanup and refactoring. 
+See more [examples here](https://maps.sasaki.com/zaru/index.html). Note that not all examples in the showcase are included in this repository. This is pending further code cleanup and refactoring. 
